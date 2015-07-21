@@ -326,7 +326,7 @@ void print_page_residency_chart(FILE *out, char *mincore_array, int64_t pages_in
   if (pages_in_file <= RESIDENCY_CHART_WIDTH) pages_per_char = 1;
   else pages_per_char = (pages_in_file / RESIDENCY_CHART_WIDTH) + 1;
 
-  fprintf(out, "\r[");
+  fprintf(out, "[");
 
   for (i=0; i<pages_in_file; i++) {
     if (is_mincore_page_resident(mincore_array[i])) {

@@ -355,8 +355,65 @@ void print_page_residency_chart(FILE *out, char *mincore_array, int64_t pages_in
 }
 
 
+void do_evict(char * path, int fd, void * mem, int64_t len_of_file /*TODO*/) {
+  if (o_verbose) printf("Evicting %s\n", path);
 
+#if defined(__linux__) || defined(__hpux)
+  if (posix_fadvise(fd, 0, len_of_file, POSIX_FADV_DONTNEED))
+    warning("unable to posix_fadvise file %s (%s)", path, strerror(errno));
+#elif defined(__FreeBSD__) || defined(__sun__) || defined(__APPLE__)
+  if (msync(mem, len_of_file, MS_INVALIDATE))
+    warning("unable to msync invalidate file %s (%s)", path, strerror(errno));
+#else
+  fatal("cache eviction not (yet?) supported on this platform");
+#endif
+}
 
+void do_touch(char *path, void *mem, int64_t len_of_file, int64_t pages_in_file) {
+  int i;
+  int64_t pages_in_core=0;
+  double last_chart_print_time=0.0, temp_time;
+  char *mincore_array = malloc(pages_in_file);
+  if (mincore_array == NULL) fatal("Failed to allocate memory for mincore array (%s)", strerror(errno));
+
+  // 3rd arg to mincore is char* on BSD and unsigned char* on linux
+  if (mincore(mem, len_of_file, (void*)mincore_array)) fatal("mincore %s (%s)", path, strerror(errno));
+  for (i=0; i<pages_in_file; i++) {
+    if (is_mincore_page_resident(mincore_array[i])) {
+      pages_in_core++;
+      total_pages_in_core++;
+    }
+  }
+
+  if (o_verbose) {
+    printf("%s\n", path);
+    last_chart_print_time = gettimeofday_as_double();
+    print_page_residency_chart(stdout, mincore_array, pages_in_file);
+  }
+
+  if (o_touch) {
+    for (i=0; i<pages_in_file; i++) {
+      junk_counter += ((char*)mem)[i*pagesize];
+      mincore_array[i] = 1;
+
+      if (o_verbose) {
+        temp_time = gettimeofday_as_double();
+
+        if (temp_time > (last_chart_print_time+CHART_UPDATE_INTERVAL)) {
+          last_chart_print_time = temp_time;
+          print_page_residency_chart(stdout, mincore_array, pages_in_file);
+        }
+      }
+    }
+  }
+
+  if (o_verbose) {
+    print_page_residency_chart(stdout, mincore_array, pages_in_file);
+    printf("\n");
+  }
+
+  free(mincore_array);
+}
 
 void vmtouch_file(char *path) {
   int fd;
@@ -364,7 +421,6 @@ void vmtouch_file(char *path) {
   struct stat sb;
   int64_t len_of_file;
   int64_t pages_in_file;
-  int i;
   int res;
 
   res = o_followsymlinks ? stat(path, &sb) : lstat(path, &sb);
@@ -396,10 +452,10 @@ void vmtouch_file(char *path) {
     if (errno == ENFILE || errno == EMFILE) {
       increment_nofile_rlimit();
       goto retry_open;
+    } else {
+      warning("unable to open %s (%s), skipping", path, strerror(errno));
+      return;
     }
-
-    warning("unable to open %s (%s), skipping", path, strerror(errno));
-    return;
   }
 
   mem = mmap(NULL, len_of_file, PROT_READ, MAP_SHARED, fd, 0);
@@ -417,60 +473,9 @@ void vmtouch_file(char *path) {
   total_pages += pages_in_file;
 
   if (o_evict) {
-    if (o_verbose) printf("Evicting %s\n", path);
-
-#if defined(__linux__) || defined(__hpux)
-    if (posix_fadvise(fd, 0, len_of_file, POSIX_FADV_DONTNEED))
-      warning("unable to posix_fadvise file %s (%s)", path, strerror(errno));
-#elif defined(__FreeBSD__) || defined(__sun__) || defined(__APPLE__)
-    if (msync(mem, len_of_file, MS_INVALIDATE))
-      warning("unable to msync invalidate file %s (%s)", path, strerror(errno));
-#else
-    fatal("cache eviction not (yet?) supported on this platform");
-#endif
+    do_evict(path, fd, mem, len_of_file);
   } else {
-    int64_t pages_in_core=0;
-    double last_chart_print_time=0.0, temp_time;
-    char *mincore_array = malloc(pages_in_file);
-    if (mincore_array == NULL) fatal("Failed to allocate memory for mincore array (%s)", strerror(errno));
-
-    // 3rd arg to mincore is char* on BSD and unsigned char* on linux
-    if (mincore(mem, len_of_file, (void*)mincore_array)) fatal("mincore %s (%s)", path, strerror(errno));
-    for (i=0; i<pages_in_file; i++) {
-      if (is_mincore_page_resident(mincore_array[i])) {
-        pages_in_core++;
-        total_pages_in_core++;
-      }
-    }
-
-    if (o_verbose) {
-      printf("%s\n", path);
-      last_chart_print_time = gettimeofday_as_double();
-      print_page_residency_chart(stdout, mincore_array, pages_in_file);
-    }
-
-    if (o_touch) {
-      for (i=0; i<pages_in_file; i++) {
-        junk_counter += ((char*)mem)[i*pagesize];
-        mincore_array[i] = 1;
-
-        if (o_verbose) {
-          temp_time = gettimeofday_as_double();
-
-          if (temp_time > (last_chart_print_time+CHART_UPDATE_INTERVAL)) {
-            last_chart_print_time = temp_time;
-            print_page_residency_chart(stdout, mincore_array, pages_in_file);
-          }
-        }
-      }
-    }
-
-    if (o_verbose) {
-      print_page_residency_chart(stdout, mincore_array, pages_in_file);
-      printf("\n");
-    }
-
-    free(mincore_array);
+    do_touch(path, mem, len_of_file, pages_in_file);
   }
 
   if (o_lock) {

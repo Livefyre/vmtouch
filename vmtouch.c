@@ -411,7 +411,6 @@ void do_mincore(char *path, void *mem, int64_t len_of_file, int64_t pages_in_fil
 
   if (o_verbose) {
     printf("%s\n", path);
-    print_page_residency_chart_if_expired(1, stdout, mincore_array, pages_in_file);
   }
 
   if (o_touch) {

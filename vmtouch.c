@@ -36,7 +36,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ***********************************************************************/
 
-
 #define VMTOUCH_VERSION "0.8.0"
 #define RESIDENCY_CHART_WIDTH 60
 #define CHART_UPDATE_INTERVAL 0.1
@@ -100,7 +99,6 @@ ino_t crawl_inodes[MAX_CRAWL_DEPTH];
 
 // remember all inodes (for files with inode count > 1) to find duplicates
 void *seen_inodes = NULL;
-
 
 int o_touch=0;
 int o_evict=0;
@@ -275,7 +273,6 @@ int64_t parse_size(char *inp) {
   return (int64_t) (mult*val);
 }
 
-
 int64_t bytes2pages(int64_t bytes) {
   return (bytes+pagesize-1) / pagesize;
 }
@@ -287,7 +284,6 @@ int aligned_p(void *p) {
 int is_mincore_page_resident(char p) {
   return p & 0x1;
 }
-
 
 void increment_nofile_rlimit() {
   struct rlimit r;
@@ -307,16 +303,12 @@ void increment_nofile_rlimit() {
   }
 }
 
-
-
 double gettimeofday_as_double() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
 
   return tv.tv_sec + (tv.tv_usec/1000000.0);
 }
-
-
 
 void print_page_residency_chart(FILE *out, char *mincore_array, int64_t pages_in_file) {
   int64_t pages_in_core=0;
@@ -380,7 +372,6 @@ void do_evict(char * path, int fd, void * mem, int64_t len_of_file /*TODO*/) {
   fatal("cache eviction not (yet?) supported on this platform");
 #endif
 }
-
 
 void do_touch(void *mem, int64_t pages_in_file, char *mincore_array) {
   int i;
@@ -498,7 +489,6 @@ void vmtouch_file(char *path) {
     close(fd);
   }
 }
-
 
 // compare device and inode information
 int compare_func(const void *p1, const void *p2)
@@ -629,14 +619,6 @@ void vmtouch_crawl(char *path) {
     }
   }
 }
-
-
-
-
-
-
-
-
 
 int main(int argc, char **argv) {
   int ch, i;

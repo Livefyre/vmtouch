@@ -326,7 +326,7 @@ void print_page_residency_chart(FILE *out, char *mincore_array, int64_t pages_in
   if (pages_in_file <= RESIDENCY_CHART_WIDTH) pages_per_char = 1;
   else pages_per_char = (pages_in_file / RESIDENCY_CHART_WIDTH) + 1;
 
-  fprintf(out, "\r[");
+  fprintf(out, "[");
 
   for (i=0; i<pages_in_file; i++) {
     if (is_mincore_page_resident(mincore_array[i])) {
@@ -349,11 +349,23 @@ void print_page_residency_chart(FILE *out, char *mincore_array, int64_t pages_in
     else fprintf(out, "o");
   }
 
-  fprintf(out, "] %" PRId64 "/%" PRId64, pages_in_core, pages_in_file);
+  fprintf(out, "] %" PRId64 "/%" PRId64 "\n", pages_in_core, pages_in_file);
 
   fflush(out);
 }
 
+double nextChartPrintTime(double last_chart_print_time) {
+  return last_chart_print_time+CHART_UPDATE_INTERVAL;
+}
+
+void print_page_residency_chart_if_expired(int force, FILE *out, char *mincore_array, int64_t pages_in_file) {
+  static double last_chart_print_time = 0.0;
+  double temp_time = gettimeofday_as_double();
+  if (force || temp_time > nextChartPrintTime(last_chart_print_time)) {
+    last_chart_print_time = temp_time;
+    print_page_residency_chart(out, mincore_array, pages_in_file);
+  }
+}
 
 void do_evict(char * path, int fd, void * mem, int64_t len_of_file /*TODO*/) {
   if (o_verbose) printf("Evicting %s\n", path);
@@ -369,10 +381,22 @@ void do_evict(char * path, int fd, void * mem, int64_t len_of_file /*TODO*/) {
 #endif
 }
 
-void do_touch(char *path, void *mem, int64_t len_of_file, int64_t pages_in_file) {
+
+void do_touch(void *mem, int64_t pages_in_file, char *mincore_array) {
+  int i;
+  for (i=0; i<pages_in_file; i++) {
+    junk_counter += ((char*)mem)[i*pagesize]; // This is odd. I don't think this function actually touches.
+    mincore_array[i] = 1;
+
+    if (o_verbose) {
+      print_page_residency_chart_if_expired(0, stdout, mincore_array, pages_in_file);
+    }
+  }
+}
+
+void do_mincore(char *path, void *mem, int64_t len_of_file, int64_t pages_in_file) {
   int i;
   int64_t pages_in_core=0;
-  double last_chart_print_time=0.0, temp_time;
   char *mincore_array = malloc(pages_in_file);
   if (mincore_array == NULL) fatal("Failed to allocate memory for mincore array (%s)", strerror(errno));
 
@@ -387,28 +411,15 @@ void do_touch(char *path, void *mem, int64_t len_of_file, int64_t pages_in_file)
 
   if (o_verbose) {
     printf("%s\n", path);
-    last_chart_print_time = gettimeofday_as_double();
-    print_page_residency_chart(stdout, mincore_array, pages_in_file);
+    print_page_residency_chart_if_expired(1, stdout, mincore_array, pages_in_file);
   }
 
   if (o_touch) {
-    for (i=0; i<pages_in_file; i++) {
-      junk_counter += ((char*)mem)[i*pagesize];
-      mincore_array[i] = 1;
-
-      if (o_verbose) {
-        temp_time = gettimeofday_as_double();
-
-        if (temp_time > (last_chart_print_time+CHART_UPDATE_INTERVAL)) {
-          last_chart_print_time = temp_time;
-          print_page_residency_chart(stdout, mincore_array, pages_in_file);
-        }
-      }
-    }
+    do_touch(mem, pages_in_file, mincore_array);
   }
 
   if (o_verbose) {
-    print_page_residency_chart(stdout, mincore_array, pages_in_file);
+    print_page_residency_chart_if_expired(1, stdout, mincore_array, pages_in_file);
     printf("\n");
   }
 
@@ -475,7 +486,7 @@ void vmtouch_file(char *path) {
   if (o_evict) {
     do_evict(path, fd, mem, len_of_file);
   } else {
-    do_touch(path, mem, len_of_file, pages_in_file);
+    do_mincore(path, mem, len_of_file, pages_in_file);
   }
 
   if (o_lock) {

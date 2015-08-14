@@ -10,6 +10,9 @@ upcoming
   * HP-UX support from Shane Seymour (thanks!)
   * Patch from soarpenguin: detect invalid size formats
 
+0.7.4
+  * Easier to parse output
+
 0.7.3
   * Solaris support for page eviction
 

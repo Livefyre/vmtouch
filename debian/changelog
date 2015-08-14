@@ -1,3 +1,9 @@
+vmtouch (0.7.4) unstable; urgency=low
+
+  * Improved output format.
+
+ -- Andrew Thomson <athomsonguy@gmail.com>  Thu, 13 Aug 2015 20:03:00 -0700
+
 vmtouch (0.7.3) unstable; urgency=low
 
   * Initial release

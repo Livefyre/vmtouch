@@ -1,3 +1,9 @@
+vmtouch (0.7.5) unstable; urgency=low
+
+  * Version bump to avoid name collision in reprepro
+
+ -- Michael Liao <mliao@adobe.com>  Tue, 02 May 2017 16:20:34 +0200
+
 vmtouch (0.7.4) unstable; urgency=low
 
   * Improved output format.
